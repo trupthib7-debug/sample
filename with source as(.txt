@@ -1,0 +1,16 @@
+with source as(
+select * from 
+{{source('product_management','product_history')}}
+),
+renamed as (
+select
+"product_id" as "product_id",
+-------------
+from source
+)
+select *
+from renamed
+
+
+------------------
+

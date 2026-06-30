@@ -1,0 +1,388 @@
+SELECT * FROM TABLE
+AT(OFFSET => INTERVAL > DAY);
+
+---------------
+
+WITH CTE AS(
+SELECT *,EMP_ID 
+ROW_NUMBER() OVER(PARTITION BY EMP_ID ORDER BY EMP_NAME) AS RN
+FROM EMP
+)
+DELETE FROM EMP WHERE EMP_ID IN(SELECT EMP_ID FROM CTE WHERE RN>1);
+
+-------------
+
+CUST 
+CUST_ID CUST_NAME
+
+
+
+PRODUCT TABLE
+PROD_ID PROD_NAME PROD_PRICE
+
+
+
+PURCHASE
+PUR_ID CUST_ID PROD_ID  PUR_DATE
+
+----------
+
+SAME PRODUCT BROUGHT BY CUSTOMER IN CONSUQUITE MONTH?
+
+WITH PURCHASE AS (
+SELECT CUST_ID,
+CUST_NAME,
+PROD_ID,
+PROD_NAME,
+DATE_TRUNC('MONTH',PUR_DATE) AS PURCHASE_MONTH,
+LAG(DATE_TRUNC('MONTH',PUR_DATE)) OVER(
+PARTITION BY CUST_ID,PROD_ID
+ORDER BY PUR_DATE
+)
+AS PREV_MONTH
+FROM PURCHASE P
+JOIN CUST C ON P.CUST_ID=C.CUST_ID
+JOIN PRODUCT P ON P.PROD_ID=P.PROD_ID
+)
+SELECT DISTINCT CUST_ID,CUST_NAME,PROD_ID,PROD_NAME
+FROM PURCHASE_MONTH
+WHERE DATEDIFF(MONTH,PREV_MONTH,PURCHSE_MANTH) = 1;
+
+
+-----------------
+WHICH EXPENSE PROD PURCHASE BY INDIVISUAL CUSTOMER?
+
+SELECT CUST_ID,
+ CUST_NAME,
+PROD_ID,
+PROD_NAME FROM 
+(
+SELECT CUST_ID,CUST_NAME,MAX(PROD_PRICE) AS PRICE 
+FROM PURCHASE PR
+GROUP BY CUST_ID,PROD_ID
+) P 
+JOIN CUSTOMER C ON P.CUST_ID=C.CUST_ID
+JOIN PRODUCT P ON P.PROD_ID=PR.PROD_ID;
+
+----------
+
+select parse_json(system$clustering_information
+('<tablename>',
+'(null')
+) :total_partition_count::integer  as partition_count;
+
+---
+select bussiness_name, review_text,rank() over
+(order by cool desc) as rank 
+from yelp_reviews)a
+where rank = 1;
+---
+select emp_id, emp_name
+from emp_table
+where emp_title 
+like '%engineer%' -- return all the titles including the word,
+engineer;
+
+----------
+req_id  req_date  req_status  distance_to_travel  monetary_cost  driver_to_client_distance
+-------------
+
+select 
+b.month,
+round(avg(abs(b.daily_dis_to_cost-b.mothly_dist_to_cost))::decimal,2) as avg_diff
+from
+(
+select 
+a.req_date,
+a.month,
+a.daily_dis_to_cost,
+avg(a.daily_dis_to_cost)
+over(partition by a.month) as monthly_dist_to_cost
+from
+(
+select *,
+TO_CHAR(req_date::date,'yyyy-mm') as month
+(distance_to_travel/
+monetary_cost) as daily_dis_to_cost
+from uber_request_logs) a
+ order by req_date) b 
+group by b.month
+order by b.month;
+
+month   avg_diff
+-------------
+
+with cte1 as (
+select *,
+TO_CHAR(req_date::date,'yyyy-mm') as month,
+(distance_to_travel/
+monetary_cost) as daily_dis_to_cost
+from uber_request_logs
+),
+cte2 as (
+select req_date,
+month,
+daily_dis_to_cost,
+avg(daily_dis_to_cost) 
+over (partition by month) as monthly_dis_to_cost
+from cte1
+order by req_date
+)
+select month,
+round(avg(abc(daily_dis_to_cost-monthy_dis_to_cost)) :: decimal,2) as avg_diff
+from cte2
+group by month
+order by month;
+
+----------
+
+select emp_name, sal
+from sample a
+where 1= (select 
+count(distinct(salary)) from 
+sample b where a.salary<b.salary);
+
+-----------
+
+select user_id, timestamp::date as date,
+max(case when action='page_load' then timestamp else null end)
+ as latest_page_load,
+
+min(case when action='page_load' then timestamp else null end)
+ as earliest_page_exit
+from facebook
+group by user_id,timestamp::date;
+
+--------------
+
+select max(salary) as secondhighestsalary
+from employees
+where salary<(
+select max(salary) from emp
+);
+
+--
+select e.name
+from employees e
+join employees m on e.manager_id=m.id
+where e.salary>m.salary;
+---------
+select product_id,
+category,
+rank() over(partition by category order by sales desc) as rank
+from products;
+
+----------
+select * from(
+select name,dept,sal
+dense_rank() over(partition by department order by salary desc) as rank
+from employees
+) ranked
+where rank <= 2;
+--------
+
+with ranked salary as (
+select dept,sal,
+dense_rank() over (partition by dept order by sal desc) as rnk
+from emp)
+select dept,sal
+from ranked salary
+where rank <=2
+order by department,rank;
+
+----------
+
+with monthly_purchase as(
+select 
+cust_id,
+date_trunc('month',purchase_date) as month
+from purchases
+group by cust_id,date_trunc('month',purchase_date)
+),
+consecutive_purchase as (
+select *,
+lag(month) over(partition by cust_id order by month) as prev_month
+from monthly_purchase
+)
+select * 
+from consecutive_purchase
+where month = prev_month + interval '1 month';
+
+------------
+select c.cust_id
+from cust c 
+left join order o on c.cust_id=o.cust_id
+where o.order_id is null;
+---------
+select order_date,
+sum(revenue) over(order by order_date) as cucmulative_order
+from orders;
+-------
+
+select coalesce(max(event_time),'1900-01-01') from {{this}} )
+
+{% macro get_max_day(model,column,default_date='2020-01-01') %}
+{% set sql_statement %}
+select coalesce(max({{ column }}), '{{ default_date }}') from {{ model }}
+{% endset %}
+
+------------
+
+scd 2
+-------
+
+staging model (stg_customers.sql)
+{{ config (materialized='view') }}
+select 
+cust_id,
+name,
+address,
+membership_tier,
+updated_at
+from raw.customers
+
+-----
+ ( dim_customers.sql)
+
+{{ config(
+materialized='incremental',
+unique_key='customer_scd_id'
+)
+}}
+with source as (
+select cust_id,
+name,
+address,
+membership_tier,
+updated_at
+from {{ ref('stg_customers') }}
+),
+scd updates as (
+s.customer_id,
+s.name,
+s.address,
+s.membership_tier,
+s.updated_at,
+coalesce(d.customer_scd_id,
+md5(cast(s.customer_id as string)|| '-' || cast(s.updated_at as string ))) as customer_scd_id,
+case
+when d.customer_scd_id is null then true -- new record
+when s.updated_at> d.update_at then true -- change record
+else false
+end as is_new_record
+from source s
+left join {{this}} d
+on s.customer_id = d.customer_id
+and d.is_active = true -- join with active records only
+)
+select customer_scd_id,
+customer_id,
+name,
+address,
+membership_tier,
+updated_at,
+case
+when is_new_record then true
+else false
+end as is_active,
+updated_at as effective_date,
+null as expiry_date  -- will be updated in subsequent runs
+from scd_updated
+where is_new_record
+
+union all 
+
+select
+customer_scd_id,
+customer_id,
+name,
+address,
+membership_tier,
+updated_at,
+false as is_active,
+effective_date,
+updated_at as expiry_date
+from {[this}]
+where customer_id in (select customer_id from scd_updates where is_new_record)
+and is_active = true;
+
+--------------
+
+115797@Dar12
+-------
+
+select 
+title,release_year,
+avg(budget) avg_budget,
+avg(gross) avg_gross,
+from films
+where release_year > '1990'
+and budget is not null
+and gross is not null
+group by title,release_year
+order by avg_budget desc, avg_gross desc;
+
+-------
+select title,release_year,avg(budget) avg_budget,
+avg(gross) avg_gross,
+from films
+where release_year > '1990'
+and budget is not null
+and gross is not null
+group by title,release_year
+having avg(budget) > 60000000
+order by avg_budget desc,avg_gross desc;
+
+-----------
+select cust_name,order_date
+from order
+order by order_date
+offset 0 rows fetch next 10 rows only;
+-------
+select emp_name,
+dept
+from emp
+ order by (select avg(salary) from employees e2 where e2.dept_id = employees.depat_id) desc, employee_name;
+
+select avg(salary) as avg_sal ,emp_name,dep_id
+from emp
+order by avg_sal,emp_name;
+-------
+select category_name,
+from products
+order by
+case category_name
+when 'electronics' then 1
+when 'clothing' then 2
+when 'books' then 3
+else 4
+end;
+-------
+
+select order_id,orderdate
+from orders
+where orderdate > str_to_date('01/01/2023','%m/%d%y');
+-----
+where orderdate> dateadd(day,-30,getdate());
+
+----------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
